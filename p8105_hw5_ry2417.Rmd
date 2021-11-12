@@ -28,26 +28,15 @@ scale_fill_discrete = scale_fill_viridis_d(option = "viridis")
 ## Problem 1
 
 ```{r}
-homicide_df <- 
+homicide_df_raw <- 
   read_csv("data/homicide-data.csv") %>% 
   janitor::clean_names()
-age_gender<- 
-  homicide_df %>% 
-  filter(victim_age != "Unknown") %>% 
-  mutate(victim_age = as.numeric(victim_age)) %>% 
-  ggplot(aes(y = victim_age)) +
-  geom_bar() +
-  facet_grid(. ~ victim_sex) +
-  labs(
-    x = "number of victim",
-    title = "Age and Gender distribution of victim"
-  )
 ```
 
-There are `r homicide_df %>% nrow()` cases of homicide with `r homicide_df %>% ncol()` variables in this data. The variables are `r homicide_df %>% colnames() %>% paste(collapse = ", ")`. There are `r homicide_df %>% count(state) %>% nrow()` states and `r homicide_df %>% count(city) %>% nrow()` cities. The distribution of age and gender of victim shown here: 
+There are `r homicide_df_raw %>% nrow()` cases of homicide with `r homicide_df_raw %>% ncol()` variables in this data. The variables are `r homicide_df_raw %>% colnames() %>% paste(collapse = ", ")`. There are `r homicide_df_raw %>% count(state) %>% nrow()` states and `r homicide_df_raw %>% count(city) %>% nrow()` cities. The distribution of age and gender of victim shown here: 
 
 ```{r age_gender_distribution}
-homicide_df %>% 
+homicide_df_raw %>% 
   filter(victim_age != "Unknown") %>% 
   mutate(victim_age = as.numeric(victim_age)) %>% 
   ggplot(aes(y = victim_age)) +
@@ -59,8 +48,66 @@ homicide_df %>%
   )
 ```
 
+The table summarizes within cities to obtain the total number of homicides and 
+the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”)
 ```{r}
-
+homicide_df <- 
+  homicide_df_raw %>% 
+  mutate(
+    state = str_to_upper(state),
+    city_state = paste0(city, ", ", state)
+  ) %>% 
+  select(city_state, everything())
+homicide_df %>% 
+  group_by(city_state) %>% 
+  summarize(
+    num_homicide = n(),
+    num_unsolved = sum(disposition == "Closed without arrest" |
+                         disposition == "Open/No arrest")
+  ) %>% 
+  knitr::kable()
+  
 ```
 
 
+## Problem 2
+
+
+```{r}
+study_df <- 
+  tibble(
+    file_names = list.files("data/data", full.names = TRUE)  
+  ) %>% 
+  mutate(
+    observation_data = purrr::map(.x = file_names, ~read_csv(.x)),
+    id = str_extract(file_names, pattern = "[[:digit:]]+"),
+    arm = str_sub(file_names, start = 11, end = 13)
+  ) %>% 
+  unnest(observation_data) %>% 
+  select(arm, id, everything(), -file_names) %>% 
+  pivot_longer(cols = starts_with("week_"),
+               names_to = "week",
+               names_prefix = "week_",
+               values_to = "observations")
+
+
+```
+
+Some examples of the resulted data frame shown as 
+`r study_df %>% head(20) %>% knitr::kable()`
+
+```{r}
+study_df %>% 
+  mutate(arm_id = paste(arm, "_", id),
+         week = as.numeric(week)) %>% 
+  ggplot(aes(x = week, y = observations, group = arm_id, color = arm)) +
+  geom_line() +
+  labs(
+    title = "Observations of Each Subject Over Time(Control vs. Experiment)",
+    caption = "Data from a Longitudinal Study"
+  ) +
+  scale_color_discrete(labels = c("control", "experiment"))
+```
+
+The observations of experimental arm is increasingly higher than the observations of control arm over time.
+The difference of observations between control arm and experimental arm increases over time.
