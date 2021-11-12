@@ -1,0 +1,66 @@
+---
+title: "p8105_hw5_ry2417"
+author: "Ruiqi Yan"
+date: "`r format(Sys.time(), '%m/%d/%Y')`"
+output: github_document
+---
+
+```{r, include = FALSE}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  echo = FALSE
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d(option = "viridis")
+scale_fill_discrete = scale_fill_viridis_d(option = "viridis")
+```
+
+## Problem 1
+
+```{r}
+homicide_df <- 
+  read_csv("data/homicide-data.csv") %>% 
+  janitor::clean_names()
+age_gender<- 
+  homicide_df %>% 
+  filter(victim_age != "Unknown") %>% 
+  mutate(victim_age = as.numeric(victim_age)) %>% 
+  ggplot(aes(y = victim_age)) +
+  geom_bar() +
+  facet_grid(. ~ victim_sex) +
+  labs(
+    x = "number of victim",
+    title = "Age and Gender distribution of victim"
+  )
+```
+
+There are `r homicide_df %>% nrow()` cases of homicide with `r homicide_df %>% ncol()` variables in this data. The variables are `r homicide_df %>% colnames() %>% paste(collapse = ", ")`. There are `r homicide_df %>% count(state) %>% nrow()` states and `r homicide_df %>% count(city) %>% nrow()` cities. The distribution of age and gender of victim shown here: 
+
+```{r age_gender_distribution}
+homicide_df %>% 
+  filter(victim_age != "Unknown") %>% 
+  mutate(victim_age = as.numeric(victim_age)) %>% 
+  ggplot(aes(y = victim_age)) +
+  geom_bar() +
+  facet_grid(. ~ victim_sex) +
+  labs(
+    x = "number of victim",
+    title = "Age and Gender distribution of victim"
+  )
+```
+
+```{r}
+
+```
+
+
