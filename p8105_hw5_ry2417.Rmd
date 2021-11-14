@@ -116,5 +116,29 @@ The observations of experimental arm is increasingly higher than the observation
 The difference of observations between control arm and experimental arm increases over time.\
 
 
-##
+## Problem 3
+
+```{r}
+set.seed(10)
+
+iris_with_missing <- iris %>% 
+  map_df(~replace(.x, sample(1:150, 20), NA)) %>%
+  mutate(Species = as.character(Species))
+```
+
+```{r, echo = TRUE}
+replace_missing <- function(input_vector) {
+  if (is_numeric(input_vector)) {
+    input_vector[is.na(input_vector)] = mean(input_vector, na.rm = TRUE)
+  } else {
+    input_vector[is.na(input_vector)] = "virginica"
+  }
+  
+  return(input_vector)
+}
+
+iris_no_missing <-
+  iris_with_missing %>% 
+  map(~replace_missing(.x))
+```
 
