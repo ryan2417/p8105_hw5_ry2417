@@ -44,11 +44,12 @@ homicide_df_raw %>%
   facet_grid(. ~ victim_sex) +
   labs(
     x = "number of victim",
-    title = "Age and Gender distribution of victim"
+    y = "age",
+    title = "Age and Gender Distribution of Victims"
   )
 ```
 
-The table summarizes within cities to obtain the total number of homicides and 
+summarizes within cities to obtain the total number of homicides and 
 the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”)
 ```{r}
 homicide_df <- 
@@ -94,7 +95,9 @@ study_df <-
 ```
 
 Some examples of the resulted data frame shown as 
-`r study_df %>% head(20) %>% knitr::kable()`
+`r study_df %>% head(10) %>% knitr::kable()`
+
+A spaghetti plot showing observations on each subject over time
 
 ```{r}
 study_df %>% 
@@ -110,4 +113,8 @@ study_df %>%
 ```
 
 The observations of experimental arm is increasingly higher than the observations of control arm over time.
-The difference of observations between control arm and experimental arm increases over time.
+The difference of observations between control arm and experimental arm increases over time.\
+
+
+##
+
