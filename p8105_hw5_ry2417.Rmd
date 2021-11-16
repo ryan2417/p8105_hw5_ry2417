@@ -10,8 +10,7 @@ library(tidyverse)
 
 knitr::opts_chunk$set(
   warning = FALSE,
-  message = FALSE,
-  echo = FALSE
+  message = FALSE
 )
 
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
@@ -29,45 +28,125 @@ scale_fill_discrete = scale_fill_viridis_d(option = "viridis")
 
 ```{r}
 homicide_df_raw <- 
-  read_csv("data/homicide-data.csv") %>% 
-  janitor::clean_names()
+  read_csv("data/homicide-data.csv", na = c("", "Unknown"))
 ```
 
-There are `r homicide_df_raw %>% nrow()` cases of homicide with `r homicide_df_raw %>% ncol()` variables in this data. The variables are `r homicide_df_raw %>% colnames() %>% paste(collapse = ", ")`. There are `r homicide_df_raw %>% count(state) %>% nrow()` states and `r homicide_df_raw %>% count(city) %>% nrow()` cities. The distribution of age and gender of victim shown here: 
+There are `r homicide_df_raw %>% nrow()` cases of homicide with `r homicide_df_raw %>% ncol()` variables in this data. The variables are `r homicide_df_raw %>% colnames() %>% paste(collapse = ", ")`. There are `r homicide_df_raw %>% count(state) %>% nrow()` states and `r homicide_df_raw %>% count(city) %>% nrow()` cities. 
 
-```{r age_gender_distribution}
-homicide_df_raw %>% 
-  filter(victim_age != "Unknown") %>% 
-  mutate(victim_age = as.numeric(victim_age)) %>% 
-  ggplot(aes(y = victim_age)) +
-  geom_bar() +
-  facet_grid(. ~ victim_sex) +
-  labs(
-    x = "number of victim",
-    y = "age",
-    title = "Age and Gender Distribution of Victims"
-  )
-```
-
-summarizes within cities to obtain the total number of homicides and 
-the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”)
 ```{r}
 homicide_df <- 
   homicide_df_raw %>% 
   mutate(
-    state = str_to_upper(state),
-    city_state = paste0(city, ", ", state)
+    city_state = str_c(city, str_to_upper(state),sep = ","),
+    resolution = case_when(
+      disposition == "Closed without arrest" ~ "unsolved",
+      disposition == "Open/No arrest" ~ "unsolved",
+      disposition == "Closed by arrest" ~ "solved"
+    )
   ) %>% 
-  select(city_state, everything())
+  relocate(city_state) %>% 
+  filter(city_state != "Tulsa,AL") 
+```
+
+
+```{r}
+baltimore_df <-
+  homicide_df %>% 
+  filter(city_state == "Baltimore,MD")
+
+baltimore_summary <-
+  baltimore_df %>% 
+  summarize(
+    unsolved = sum(resolution == "unsolved"),
+    n = n()
+  )
+baltimore_test <-
+  prop.test(
+  x = baltimore_summary %>% pull(unsolved),
+  n = baltimore_summary %>% pull(n)
+)
+
+baltimore_test %>% 
+  broom::tidy()
+```
+
+Let's try to iterate across cities
+
+First of all, write a function.
+
+```{r}
+prop_test_function = function(city_df){
+  city_summary <- 
+    city_df %>% 
+    summarize(
+      unsolved = sum(resolution == "unsolved"),
+      n = n()
+    )
+  city_test <- 
+    prop.test(
+      x = city_summary %>% pull(unsolved),
+      n = city_summary %>% pull(n)
+    )
+  return(city_test)
+}
+
 homicide_df %>% 
+  filter(city_state == "Albuquerque,NM") %>% 
+  prop_test_function()
+```
+
+Now, let's iterate across all cities.
+
+```{r}
+results_df <-
+  homicide_df %>% 
+  nest(data = uid:resolution) %>% 
+  mutate(
+    test_results = map(data, prop_test_function),
+    tidy_results = map(test_results, broom::tidy)
+  ) %>% 
+  select(city_state, tidy_results) %>% 
+  unnest(tidy_results) %>% 
+  select(city_state, estimate, starts_with("conf"))
+  
+```
+
+Try to make a plot showing estimates and confidence intervals.
+
+```{r}
+results_df %>% 
+  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+  ggplot(aes(x = city_state, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+summarizes within cities to obtain the total number of homicides and 
+the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”)
+
+```{r}
+results_df_2 <- 
+  homicide_df %>% 
   group_by(city_state) %>% 
   summarize(
     num_homicide = n(),
-    num_unsolved = sum(disposition == "Closed without arrest" |
-                         disposition == "Open/No arrest")
+    num_unsolved = sum(resolution == "unsolved")
   ) %>% 
-  knitr::kable()
-  
+  mutate(
+    test_results = map2(num_unsolved, num_homicide, prop.test),
+    tidy_results = map(test_results, broom::tidy)
+  ) %>% 
+  select(city_state, tidy_results) %>% 
+  unnest(tidy_results) %>% 
+  select(city_state, estimate, starts_with("conf"))
+
+results_df_2 %>% 
+  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+  ggplot(aes(x = city_state, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ```
 
 
@@ -75,23 +154,20 @@ homicide_df %>%
 
 
 ```{r}
+list_file_names <- list.files("data/data", full.names = TRUE)
+
 study_df <- 
   tibble(
-    file_names = list.files("data/data", full.names = TRUE)  
+    file_names = list_file_names
   ) %>% 
   mutate(
-    observation_data = purrr::map(.x = file_names, ~read_csv(.x)),
+    observation_data = map(file_names, read_csv),
     id = str_extract(file_names, pattern = "[[:digit:]]+"),
     arm = str_sub(file_names, start = 11, end = 13)
   ) %>% 
+  relocate(arm, id) %>% 
   unnest(observation_data) %>% 
-  select(arm, id, everything(), -file_names) %>% 
-  pivot_longer(cols = starts_with("week_"),
-               names_to = "week",
-               names_prefix = "week_",
-               values_to = "observations")
-
-
+  select(-file_names)
 ```
 
 Some examples of the resulted data frame shown as 
@@ -101,9 +177,13 @@ A spaghetti plot showing observations on each subject over time
 
 ```{r}
 study_df %>% 
-  mutate(arm_id = paste(arm, "_", id),
+  pivot_longer(cols = starts_with("week_"),
+               names_to = "week",
+               names_prefix = "week_",
+               values_to = "observations") %>% 
+  mutate(arm_id = str_c(arm, id, sep = "_"),
          week = as.numeric(week)) %>% 
-  ggplot(aes(x = week, y = observations, group = arm_id, color = arm)) +
+  ggplot(aes(x = week, y = observations, group = arm_id, color = arm, label = arm_id)) +
   geom_line() +
   labs(
     title = "Observations of Each Subject Over Time(Control vs. Experiment)",
@@ -118,7 +198,7 @@ The difference of observations between control arm and experimental arm increase
 
 ## Problem 3
 
-```{r}
+```{r, echo = TRUE}
 set.seed(10)
 
 iris_with_missing <- iris %>% 
@@ -127,18 +207,27 @@ iris_with_missing <- iris %>%
 ```
 
 ```{r, echo = TRUE}
-replace_missing <- function(input_vector) {
-  if (is_numeric(input_vector)) {
-    input_vector[is.na(input_vector)] = mean(input_vector, na.rm = TRUE)
-  } else {
-    input_vector[is.na(input_vector)] = "virginica"
+fill_in_missing <- function(input_vector) {
+  if (is.numeric(input_vector)) {
+    output_vector <- ifelse(is.na(input_vector), 
+                          mean(input_vector, na.rm = TRUE),
+                          input_vector)
+  } 
+  if(is.character(input_vector)){
+    output_vector <- ifelse(is.na(input_vector), 
+                          "virginica",
+                          input_vector)
   }
   
-  return(input_vector)
+  return(output_vector)
 }
 
 iris_no_missing <-
   iris_with_missing %>% 
-  map(~replace_missing(.x))
+  map_df(fill_in_missing)
+
+iris_no_missing %>% 
+  head(10) %>% 
+  knitr::kable()
 ```
 
