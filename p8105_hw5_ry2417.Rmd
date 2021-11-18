@@ -213,7 +213,7 @@ fill_in_missing <- function(input_vector) {
                           mean(input_vector, na.rm = TRUE),
                           input_vector)
   } 
-  if(is.character(input_vector)){
+  if (is.character(input_vector)) {
     output_vector <- ifelse(is.na(input_vector), 
                           "virginica",
                           input_vector)
